@@ -1,0 +1,46 @@
+#ifndef HALSER_SRC_HWT901B_PARSER_H_
+#define HALSER_SRC_HWT901B_PARSER_H_
+
+#include <cstddef>
+#include <cstdint>
+
+#include "hwt901b_types.h"
+
+// WT901B packet type byte (second byte of every 11-byte frame). Only the
+// four types this firmware actually consumes are named here — the module
+// can be configured (RSW register) to also emit others (time, barometer,
+// GPS, quaternion, ...) that this firmware never asks for and this parser
+// treats as "unknown type" (ParseHWT901BFrame returns false).
+//
+// Per WitMotion's publicly documented register protocol (shared across
+// the JY901/WT901/HWT901B family, mirrored in the vendor's wit_c_sdk and
+// multiple open-source drivers) — NOT verified against a physical WT901B
+// in this environment. See SPEC.md §11.
+enum class HWT901BPacketType : uint8_t {
+  kAcceleration = 0x51,
+  kAngularVelocity = 0x52,
+  kAngle = 0x53,
+  kMagnetic = 0x54,
+};
+
+// Parses one 11-byte WT901B frame: `0x55 <type> <8 data bytes>
+// <checksum>`, checksum = low byte of the sum of the first 10 bytes.
+//
+// Unlike the line-based HWT3100 protocol this project's parser used to
+// handle, the WT901B streams several *different* packet types in
+// sequence (acceleration, then gyro, then angle, then magnetic, ...) —
+// each call to this function decodes exactly one frame and merges the
+// fields that frame's type carries into *out; it never resets or
+// clears fields a different packet type owns. The caller is expected to
+// hold one ImuReading across a run of frames (see hwt901b_serial.cpp) so
+// a full update accumulates across the module's own packet cadence.
+//
+// Returns false (leaving *out unmodified) if `frame` isn't exactly
+// kLength bytes, doesn't start with 0x55, fails the checksum, or its
+// type byte isn't one of HWT901BPacketType's four handled values —
+// doesn't set out->timestamp either way (a hardware clock read has no
+// business in a function meant to be testable without a board, same
+// rationale as the HWT3100 parser this replaces).
+bool ParseHWT901BFrame(const uint8_t* frame, size_t len, ImuReading* out);
+
+#endif  // HALSER_SRC_HWT901B_PARSER_H_

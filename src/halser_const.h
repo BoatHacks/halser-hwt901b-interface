@@ -1,0 +1,48 @@
+#ifndef HALSER_SRC_HALSER_CONST_H_
+#define HALSER_SRC_HALSER_CONST_H_
+
+#include <driver/gpio.h>
+
+// ESP32-C3 pin assignments for HALSER board.
+// See ARCHITECTURE.md §5 (Integration Points) for the WT901B wiring
+// note: UART1 connects to HALSER's "UART" terminal block with the
+// RX-select jumper set to "U" (unchanged from the HWT3100 fork this
+// project is adapted from — same board, same terminal block).
+constexpr gpio_num_t kUART1TxPin = GPIO_NUM_2;
+constexpr gpio_num_t kUART1RxPin = GPIO_NUM_3;
+constexpr gpio_num_t kCANTxPin = GPIO_NUM_4;
+constexpr gpio_num_t kCANRxPin = GPIO_NUM_5;
+// GPIO8 (RGB LED) has no constant here: it's owned entirely by SensESP's
+// own RGBSystemStatusLed via the PIN_RGB_LED build flag in
+// platformio.ini, not touched directly by this firmware's own code —
+// see gateway.cpp and docs/plans/fault-indication.md.
+constexpr int kButtonPin = 9;
+
+// WT901B recommended baud rate (ARCHITECTURE.md §5, SPEC.md §1.2,
+// §8.2c) — tried first during boot-time auto-detection, and used as the
+// last-resort fallback if detection fails outright. NOT necessarily
+// what the module is actually on: gateway.cpp's persisted /hwt901b/baud
+// config item (auto-detected or explicitly set) is the actual source of
+// truth once known.
+constexpr int kHWT901BDefaultBaud = 115200;
+
+// NMEA 2000 device identity — cloned from the B&G Precision-9 compass's
+// identity (SPEC.md §1.2, §5.1, §10), via the reference implementation
+// htool/ESP32_Precision-9_compass_CMPS14, carried over unchanged from
+// the HWT3100 fork this project is adapted from. Deliberately NOT
+// cloned: the "unique number" passed to SetDeviceInformation() — see
+// gateway.cpp, which derives it from this board's own MAC address
+// instead (SPEC.md §10 explains why).
+constexpr uint16_t kManufacturerCode = 275;   // as used by the reference project
+constexpr uint8_t kDeviceFunction = 140;      // per the reference project's NMEA2000 class/function reference
+constexpr uint8_t kDeviceClass = 60;          // "Sensor Communication Interface"
+
+// Product info fields for tNMEA2000::SetProductInformation(), also
+// cloned from the Precision-9 reference implementation.
+constexpr const char* kProductModelSerialCode = "107018103";
+constexpr uint16_t kProductCode = 13233;
+constexpr const char* kProductModelId = "Precision-9 Compass";
+constexpr const char* kProductSoftwareVersion = "2.9.4-3";
+constexpr const char* kProductModelVersion = "2";
+
+#endif  // HALSER_SRC_HALSER_CONST_H_
