@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.1] - 2026-09-07
+
+### Decoded values in the web UI serial log
+
+The web UI's Serial Log panel now shows each frame's decoded
+interpretation alongside its hex dump — e.g. `55 53 ... -- heading=
+90.00 roll=0.00 pitch=-45.00 (deg)` for an Angle packet, `mag x=1234
+y=-567 z=89` for a Magnetic packet, or `invalid frame (bad
+header/checksum/type)` for one that doesn't parse. Implemented as
+`DescribeHWT901BFrame()` (`hwt901b_parser.h/.cpp`), a pure, unit-tested
+function reusing the same `ParseHWT901BFrame()` the rest of the
+firmware relies on. Unlike the `HALSER_DEBUG_SERIAL`-gated console
+logging added in v0.2.0-debug, this is always available — it's a cheap
+render step on an existing panel, not continuous verbose logging — and
+in particular makes it possible to check straight from the web UI
+whether the module is actually streaming `0x54` Magnetic packets
+continuously, which the N2K PGN outputs alone can't tell you (SPEC.md
+§8.1).
+
 ## [0.2.0] - 2026-09-07
 
 ### Verbose serial debug logging, disabled by default
