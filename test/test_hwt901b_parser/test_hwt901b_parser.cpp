@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include <cstdint>
+#include <cstring>
 
 #include "hwt901b_parser.h"
 #include "hwt901b_types.h"
@@ -152,6 +153,66 @@ static void test_null_arguments_rejected(void) {
   TEST_ASSERT_FALSE(ParseHWT901BFrame(frame, sizeof(frame), nullptr));
 }
 
+static void test_describe_angle_frame(void) {
+  uint8_t data[8] = {0};
+  Int16ToLE(16384, data + 0);  // roll = 90
+  Int16ToLE(-8192, data + 2);  // pitch = -45
+  Int16ToLE(16384, data + 4);  // heading = 90
+  uint8_t frame[11];
+  BuildFrame(0x53, data, frame);
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_TRUE(strstr(out, "heading=90.00") != nullptr);
+  TEST_ASSERT_TRUE(strstr(out, "roll=90.00") != nullptr);
+  TEST_ASSERT_TRUE(strstr(out, "pitch=-45.00") != nullptr);
+}
+
+static void test_describe_gyro_frame(void) {
+  uint8_t data[8] = {0};
+  Int16ToLE(16384, data + 4);  // gyro_z = 1000 deg/s
+  uint8_t frame[11];
+  BuildFrame(0x52, data, frame);
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_TRUE(strstr(out, "gyro_z=1000.00") != nullptr);
+}
+
+static void test_describe_magnetic_frame(void) {
+  uint8_t data[8] = {0};
+  Int16ToLE(1234, data + 0);
+  Int16ToLE(-567, data + 2);
+  Int16ToLE(89, data + 4);
+  uint8_t frame[11];
+  BuildFrame(0x54, data, frame);
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("mag x=1234 y=-567 z=89", out);
+}
+
+static void test_describe_acceleration_frame(void) {
+  uint8_t data[8] = {0};
+  uint8_t frame[11];
+  BuildFrame(0x51, data, frame);
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("acceleration (not decoded)", out);
+}
+
+static void test_describe_invalid_frame(void) {
+  uint8_t data[8] = {0};
+  uint8_t frame[11];
+  BuildFrame(0x53, data, frame);
+  frame[10] ^= 0xFF;  // corrupt checksum
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("invalid frame (bad header/checksum/type)", out);
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_angle_packet_fills_heading_roll_pitch);
@@ -164,5 +225,10 @@ int main(int argc, char** argv) {
   RUN_TEST(test_unknown_type_rejected);
   RUN_TEST(test_wrong_length_rejected);
   RUN_TEST(test_null_arguments_rejected);
+  RUN_TEST(test_describe_angle_frame);
+  RUN_TEST(test_describe_gyro_frame);
+  RUN_TEST(test_describe_magnetic_frame);
+  RUN_TEST(test_describe_acceleration_frame);
+  RUN_TEST(test_describe_invalid_frame);
   return UNITY_END();
 }

@@ -218,9 +218,15 @@ extension point exists in SensESP 3.2.0, per the parent project's own
 investigation, `docs/plans/gateway-wiring.md`, carried over unchanged
 here since it's a SensESP-version finding, not a sensor-protocol one).
 Unlike the parent's `AddLine(HWT3100RawLine)` (plain text), this fork's
-`AddFrame(HWT901BRawFrame)` stores the raw 11-byte binary frame and
+`AddFrame(HWT901BRawFrame)` stores the raw 11-byte binary frame;
 `to_json()` renders each as a hex byte string (`"55 53 ..."`) — a hex
-dump is the only sensible display for a fixed-length binary packet.
+dump is the only sensible display for a fixed-length binary packet —
+followed by `DescribeHWT901BFrame()`'s decoded interpretation of that
+same frame (`hwt901b_parser.h/.cpp`, §2.1), e.g. `"55 53 ... -- heading=
+90.00 roll=0.00 pitch=-45.00 (deg)"`. `DescribeHWT901BFrame()` is a
+pure, unit-tested function alongside `ParseHWT901BFrame()` — reusing
+the same parse — so this decoding is available in every build, not
+just one with `HALSER_DEBUG_SERIAL` set (SPEC.md §8.1).
 
 ### 2.6 Configuration / Web UI Wiring (`gateway.cpp`)
 

@@ -1,5 +1,7 @@
 #include "hwt901b_parser.h"
 
+#include <cstdio>
+
 namespace {
 
 int16_t ReadInt16LE(const uint8_t* p) {
@@ -60,5 +62,36 @@ bool ParseHWT901BFrame(const uint8_t* frame, size_t len, ImuReading* out) {
 
     default:
       return false;
+  }
+}
+
+void DescribeHWT901BFrame(const uint8_t* frame, size_t len, char* out, size_t out_len) {
+  if (out == nullptr || out_len == 0) return;
+
+  ImuReading reading;
+  if (!ParseHWT901BFrame(frame, len, &reading)) {
+    snprintf(out, out_len, "invalid frame (bad header/checksum/type)");
+    return;
+  }
+
+  switch (static_cast<HWT901BPacketType>(frame[1])) {
+    case HWT901BPacketType::kAcceleration:
+      snprintf(out, out_len, "acceleration (not decoded)");
+      break;
+
+    case HWT901BPacketType::kAngularVelocity:
+      snprintf(out, out_len, "gyro_z=%.2f deg/s", reading.gyro_z);
+      break;
+
+    case HWT901BPacketType::kAngle:
+      snprintf(out, out_len, "heading=%.2f roll=%.2f pitch=%.2f (deg)",
+               reading.heading, reading.roll, reading.pitch);
+      break;
+
+    case HWT901BPacketType::kMagnetic:
+      snprintf(out, out_len, "mag x=%ld y=%ld z=%ld",
+               static_cast<long>(reading.mag_x), static_cast<long>(reading.mag_y),
+               static_cast<long>(reading.mag_z));
+      break;
   }
 }

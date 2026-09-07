@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include "hwt901b_parser.h"
+
 namespace halser {
 
 void SerialTerminal::AddFrame(const HWT901BRawFrame& frame) {
@@ -23,7 +25,17 @@ bool SerialTerminal::to_json(JsonObject& config) {
       snprintf(hex + b * 3, 4, "%02X ", f.bytes[b]);
     }
     hex[HWT901BRawFrame::kLength * 3 - 1] = '\0';
-    lines.add(String(hex));
+
+    // Decoded values (SPEC.md §8.1) alongside the hex dump -- makes it
+    // possible to sanity-check what the WT901B is actually reporting
+    // straight from the web UI, without also needing
+    // HALSER_DEBUG_SERIAL/a serial console attached.
+    char decoded[64];
+    DescribeHWT901BFrame(f.bytes, HWT901BRawFrame::kLength, decoded, sizeof(decoded));
+
+    char line[sizeof(hex) + 4 + sizeof(decoded)];
+    snprintf(line, sizeof(line), "%s -- %s", hex, decoded);
+    lines.add(String(line));
   }
   return true;
 }

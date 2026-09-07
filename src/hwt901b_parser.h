@@ -43,4 +43,20 @@ enum class HWT901BPacketType : uint8_t {
 // rationale as the HWT3100 parser this replaces).
 bool ParseHWT901BFrame(const uint8_t* frame, size_t len, ImuReading* out);
 
+// Renders a short, human-readable decoded description of one 11-byte
+// WT901B frame into `out` (NUL-terminated, truncated to fit `out_len`
+// if necessary) — e.g. "heading=90.00 roll=0.00 pitch=-45.00 (deg)"
+// for an Angle (0x53) packet, "gyro_z=12.50 deg/s" for an Angular
+// Velocity (0x52) packet, "mag x=1234 y=-567 z=89" for a Magnetic
+// (0x54) packet, "acceleration (not decoded)" for a recognized but
+// uncaptured Acceleration (0x51) packet (SPEC.md §3), or
+// "invalid frame (bad header/checksum/type)" if the frame doesn't
+// parse via ParseHWT901BFrame() at all.
+//
+// Pure, no Arduino dependency, unit tested directly — used by the web
+// UI's serial log (serial_terminal.cpp) to show what each raw frame
+// actually means alongside its hex dump (SPEC.md §8.1), not just by
+// the HALSER_DEBUG_SERIAL-gated console logging in hwt901b_serial.cpp.
+void DescribeHWT901BFrame(const uint8_t* frame, size_t len, char* out, size_t out_len);
+
 #endif  // HALSER_SRC_HWT901B_PARSER_H_

@@ -307,7 +307,14 @@ sensor reading (§3, §10).
 Same mechanism as the parent project (SensESP's config REST API, §8.1
 there) — the last 30 raw frames received from the WT901B. Unlike the
 HWT3100's plain-ASCII lines, WT901B frames are binary, so each entry is
-rendered as a hex byte string rather than raw text.
+rendered as a hex byte string rather than raw text, followed by a
+decoded interpretation of that frame's contents (e.g. `heading=90.00
+roll=0.00 pitch=-45.00 (deg)` for an Angle packet, `gyro_z=12.50 deg/s`
+for a Gyro packet, `mag x=1234 y=-567 z=89` for a Magnetic packet, or
+`invalid frame (bad header/checksum/type)` for one that doesn't parse)
+— so wiring/protocol issues are visible straight from the web UI,
+without also needing a serial console or the `HALSER_DEBUG_SERIAL`
+build flag (ARCHITECTURE.md §2.1).
 
 ### 8.2 In-Place Calibration Commands
 
