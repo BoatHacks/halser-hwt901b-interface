@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.2.0-debug] - 2026-09-07
+
+### Verbose serial debug logging (pre-release)
+
+Not a functional/protocol change — adds debug visibility for hardware
+bring-up against a real WT901B, ahead of ever having one to test
+against (SPEC.md §11 lists everything about the protocol layer that
+still needs real-hardware verification; this release is a tool for
+doing that verification, not a claim that it's done).
+
+- `HWT901BSerialIO::Begin()`, `DetectBaud()`, and `SetBaudRate()` now
+  log each serial setup step at `ESP_LOGI` (opening the port, each
+  autobaud candidate tried and its outcome, the settle delay/reopen
+  during a runtime baud switch).
+- Every byte this firmware writes to the WT901B (calibration CALSW/SAVE
+  writes, BANDWIDTH/RRATE/BAUD register writes) is now logged as a hex
+  dump plus a human-readable description before it's sent.
+- Every complete 11-byte frame read from the WT901B is logged as a hex
+  dump (as before), plus — new — its decoded interpretation once
+  successfully parsed (heading/roll/pitch for `0x53`, `gyro_z` for
+  `0x52`, raw magnetic counts for `0x54`), and a distinct log line when
+  a frame is dropped for a bad header/checksum/type.
+- `hwt901b_serial.cpp` now forces `LOG_LOCAL_LEVEL` to `ESP_LOG_DEBUG`
+  before including `esp_log.h`, so this logging can't be silently
+  compiled out by a future change to `CONFIG_LOG_MAXIMUM_LEVEL` — only
+  `gateway.cpp`'s existing runtime `SetupLogging(ESP_LOG_DEBUG)` call
+  was in place before, which doesn't protect against compile-time
+  stripping.
+
 ## [0.1.0] - 2026-09-07
 
 ### Fork from halser-hwt3100-interface

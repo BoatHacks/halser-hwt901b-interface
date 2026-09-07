@@ -145,10 +145,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ steps.changelog.outputs.notes }}
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          TAG="v${{ github.event.inputs.version }}"
+          TAG="v${VERSION}"
+          # Semver convention: a hyphenated version (e.g. 0.2.0-debug) is
+          # a pre-release identifier -- mark it as such on GitHub so it
+          # doesn't show up as "Latest" and isn't picked up by tooling
+          # that only looks at full releases.
+          PRERELEASE_FLAG=""
+          case "$VERSION" in
+            *-*) PRERELEASE_FLAG="--prerelease" ;;
+          esac
           gh release create "$TAG" \
             --title "$TAG" \
             --notes "$NOTES" \
+            $PRERELEASE_FLAG \
             "$ASSET_PATH" \
             "$OTA_ASSET_PATH"
