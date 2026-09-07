@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] - 2026-09-07
+
+### Verbose serial debug logging, disabled by default
+
+Confirmed working against real WT901B hardware during the
+`v0.2.0-debug` pre-release bring-up. For this release the logging is
+gated behind a new `HALSER_DEBUG_SERIAL` compile-time flag
+(`platformio.ini`, commented out by default) rather than shipping
+enabled — it's a hardware bring-up/debugging tool, not something a
+normal install needs running continuously. Uncomment the flag to bring
+it back for a future debugging session; nothing else changes.
+
+The always-on per-frame hex dump (one line per received frame,
+present since v0.1.0) is unaffected and still logs unconditionally.
+
+See `[0.2.0-debug]` below for what the logging itself covers (setup
+steps, every TX write, every RX frame decoded).
+
 ## [0.2.0-debug] - 2026-09-07
 
 ### Verbose serial debug logging (pre-release)

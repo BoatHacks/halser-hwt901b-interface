@@ -78,6 +78,16 @@ data — the WT901B's accelerometer makes this an honest addition (SPEC.md
 Owns the UART1 (`Serial1`) handle exclusively — no other component ever
 touches `Serial1` directly. Two directions, both gated:
 
+Verbose serial debug logging (every setup step, every TX write, and
+every RX frame — hex plus decoded values) is available behind the
+`HALSER_DEBUG_SERIAL` compile-time flag (`platformio.ini`), off by
+default; it was used for the initial hardware bring-up build
+(`v0.2.0-debug`) and left in place, gated off, for the next time this
+needs debugging rather than deleted. The unconditional per-frame hex
+dump (one `ESP_LOGD` line per received frame) predates that flag and
+stays always-on regardless, same as the HWT3100 fork's own per-line
+logging.
+
 - **Read** (continuous, dedicated FreeRTOS task, same pattern as the
   parent project's read task): accumulates bytes, syncing on `0x55`
   header bytes, into 11-byte frames, then hands each frame to
