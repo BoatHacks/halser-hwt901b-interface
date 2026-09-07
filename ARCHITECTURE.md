@@ -274,6 +274,22 @@ calling `set()`. `navigation.rateOfTurn` is now sourced from
 `ImuReading.gyro_z` directly (sign-corrected, degrees/s → rad/s) instead
 of a `RateOfTurnEstimator` output (SPEC.md §10).
 
+**`SENSESP_SK_WS_BUFFER_SIZE` (`platformio.ini`, build flag, 4096).**
+SensESP's `SKWSClient` bundles every pending path update since the last
+flush into one outgoing WebSocket message, and silently drops the
+*entire* bundle — not a truncated partial one — if it exceeds this
+byte cap, logging only a rate-limited `ESP_LOGW` (`signalk_ws_client.cpp:
+"Delta too large (%u B > %u buffer)"`). The library's own default,
+1024 bytes, is too small once this firmware's real path count is all
+enabled at once (`navigation.headingMagnetic`, `.rateOfTurn`,
+`.headingTrue`, `.attitude`, the three raw magnetic-field paths, plus
+SensESP's own system-info sensors) — confirmed on real hardware
+(observed 1213 B needed) via the firmware's own `/api/log` endpoint,
+after magnetic-field output looked like it had frozen entirely (in
+fact every SignalK output had, simultaneously — N2K kept working
+throughout, since it's a separate code path unaffected by this). Raised
+to 4096 for headroom. See SPEC.md §11.
+
 ### 2.9 No Dedicated Fault LED
 
 Unchanged from the parent project — SensESP's own `RGBSystemStatusLed`

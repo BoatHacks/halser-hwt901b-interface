@@ -521,3 +521,16 @@ without physical WT901B hardware:
 - **Settle-delay timing for BAUD register switching** (§8.2c) is a
   reasonable guessed value, not derived from a WT901B timing spec, same
   caveat the parent project flagged for `AT+UART`.
+
+Resolved against real hardware: the SignalK output silently froze
+entirely (not just magnetic field, which is what first drew attention
+to it) shortly after enabling the raw-magnetic-field toggle, on a
+real device — N2K kept working throughout. Root cause, found via the
+firmware's own `/api/log` endpoint (`ARCHITECTURE.md §2.7`): SensESP's
+`SKWSClient` bundles all pending path updates into one outgoing
+WebSocket message per flush and drops the *entire* bundle if it
+exceeds `SENSESP_SK_WS_BUFFER_SIZE` (library default 1024 bytes) —
+this firmware's real path count, all enabled, needed 1213 B. Fixed by
+raising `SENSESP_SK_WS_BUFFER_SIZE` to 4096 via a `platformio.ini`
+build flag — no code change, and not a WT901B-protocol question at
+all, so listed here only for the record, not as an open question.

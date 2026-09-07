@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.2] - 2026-09-07
+
+### Fix: SignalK output silently freezing after enabling raw magnetic field
+
+Found on real hardware: shortly after enabling the raw-magnetic-field
+SignalK output, *every* SignalK output from this device (heading, rate
+of turn, attitude, magnetic field) stopped updating — permanently, and
+survived a reboot. N2K kept working throughout, since it's a
+completely separate code path (CAN/TWAI, no WiFi dependency).
+
+Root cause, found via the firmware's own `/api/log` endpoint: SensESP's
+`SKWSClient` bundles all pending SignalK path updates into one
+WebSocket message per flush cycle, and silently drops the *entire*
+bundle (not a partial/truncated one) if it exceeds
+`SENSESP_SK_WS_BUFFER_SIZE` — 1024 bytes by default. This firmware's
+full path count, all enabled, needs 1213 bytes once magnetic field
+output is on, so every flush was dropped, forever, with no visible
+symptom beyond a rate-limited warning in the ESP-IDF log:
+
+    W signalk_ws_client.cpp: Delta too large (1213 B > 1024 buffer);
+    dropped to keep the connection alive -- raise SENSESP_SK_WS_BUFFER_SIZE
+
+Fixed by raising `SENSESP_SK_WS_BUFFER_SIZE` to 4096 via a
+`platformio.ini` build flag — no code change. See SPEC.md §11,
+ARCHITECTURE.md §2.7.
+
 ## [0.2.1] - 2026-09-07
 
 ### Decoded values in the web UI serial log
