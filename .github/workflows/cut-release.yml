@@ -97,7 +97,7 @@ jobs:
       - name: Build merged flashable firmware image
         run: |
           BUILD_DIR=.pio/build/halser
-          ASSET="halser-hwt3100-interface-${{ github.event.inputs.version }}-merged.bin"
+          ASSET="halser-hwt901b-interface-${{ github.event.inputs.version }}-merged.bin"
           echo "ASSET_PATH=$BUILD_DIR/$ASSET" >> "$GITHUB_ENV"
           # Flash mode/freq/size must match what was actually compiled into
           # bootloader.bin/firmware.bin (read from the image header itself,
@@ -129,7 +129,7 @@ jobs:
           # include the bootloader/partition table, unlike the merged
           # image above which is for the initial USB flash.
           BUILD_DIR=.pio/build/halser
-          OTA_ASSET="halser-hwt3100-interface-${{ github.event.inputs.version }}-ota.bin"
+          OTA_ASSET="halser-hwt901b-interface-${{ github.event.inputs.version }}-ota.bin"
           echo "OTA_ASSET_PATH=$BUILD_DIR/$OTA_ASSET" >> "$GITHUB_ENV"
           cp "$BUILD_DIR/firmware.bin" "$BUILD_DIR/$OTA_ASSET"
 

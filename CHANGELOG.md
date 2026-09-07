@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0 — Fork from halser-hwt3100-interface
+## [0.1.0] - 2026-09-07
+
+### Fork from halser-hwt3100-interface
 
 Forked from `BoatHacks/halser-hwt3100-interface` (WitMotion HWT3100-TTL,
 compass-only) and ported to the WitMotion WT901B, a full 9-axis IMU. This
