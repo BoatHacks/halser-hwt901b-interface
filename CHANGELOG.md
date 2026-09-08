@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.4] - 2026-09-08
+
+### Add SignalK WebSocket watchdog to recover from a SensESP state-desync bug
+
+Confirmed on real hardware: a send-side failure in `SKWSClient::send_delta()`
+(`BoatHacks/SensESP`) never routes through `on_disconnected()`/`on_error()`,
+the only two places that reset `connection_state_` to `kSKWSDisconnected`.
+If the underlying transport dies in a way only observed via that send-side
+failure, `connection_state_` stays wherever it was, `connect()`'s "only run
+if Disconnected" guard silently no-ops forever, and the device never
+reconnects on its own — observed sitting in this state indefinitely
+(>15 minutes) with zero reconnect attempts, recovering only via a manual
+power cycle.
+
+Adds a watchdog: if the WS client hasn't reported "Connected" for more
+than 5 minutes, reboot the device. Doesn't fix the underlying SensESP
+bug — there's no public API to force `connection_state_` back to
+Disconnected from outside `SKWSClient` — but the board now recovers on
+its own instead of needing a physical power cycle.
+
+Verified on real hardware: flashed over USB, confirmed both N2K and
+SignalK (`navigation.headingMagnetic`, `sensors.hwt901b.magneticField.x/y/z`)
+resumed updating normally.
+
 ## [0.2.3] - 2026-09-08
 
 ### Stop logging every received frame to the serial console by default
