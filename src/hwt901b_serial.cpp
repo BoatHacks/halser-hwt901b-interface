@@ -17,23 +17,24 @@ namespace halser {
 
 namespace {
 
-// ESP_LOGD output is both written to the USB serial console and
-// captured into SensESP's in-memory LogBuffer -- makes every packet
-// this firmware sees visible for diagnosing a misbehaving/miswired
-// WT901B, same rationale as the HWT3100 fork's per-line logging.
 constexpr const char* kSerialLogTag = "hwt901b_serial";
 
 // Verbose serial debug logging (setup-step announcements, every TX
-// write and RX frame as hex + a decoded/human-readable description) —
-// disabled by default (off in platformio.ini). Built and used once for
-// initial hardware bring-up (v0.2.0-debug); left in the codebase behind
-// this flag rather than deleted, since the same bring-up/debugging need
-// will come back (e.g. after a protocol assumption in SPEC.md §11 turns
-// out wrong against real hardware). Enable by uncommenting
-// `-D HALSER_DEBUG_SERIAL` in platformio.ini's `[env:halser]`
-// build_flags. When enabled, also forces LOG_LOCAL_LEVEL to
-// ESP_LOG_DEBUG below so the extra logging can't be silently compiled
-// out by CONFIG_LOG_MAXIMUM_LEVEL.
+// write and every RX frame — as hex, and decoded — to the ESP-IDF log
+// console/LogBuffer) — disabled by default (off in platformio.ini).
+// Deliberately off: at the module's normal output rate the RX hex dump
+// alone is ~50 lines/sec, fast enough to evict lower-frequency but more
+// useful log messages (e.g. the SignalK WS client's own warnings) from
+// the log buffer within seconds (confirmed on real hardware while
+// diagnosing the SENSESP_SK_WS_BUFFER_SIZE issue, ARCHITECTURE.md
+// §2.7) — and the raw frame is already visible, decoded, in the web
+// UI's Serial Log panel (SerialTerminal, §2.5) regardless of this flag.
+// Built and used once for initial hardware bring-up (v0.2.0-debug);
+// left in the codebase behind this flag rather than deleted, since the
+// same bring-up/debugging need will come back (e.g. after a protocol
+// assumption in SPEC.md §11 turns out wrong against real hardware).
+// Enable by uncommenting `-D HALSER_DEBUG_SERIAL` in platformio.ini's
+// `[env:halser]` build_flags.
 #ifdef HALSER_DEBUG_SERIAL
 
 // Renders `len` bytes as a space-separated uppercase hex string into
@@ -310,11 +311,23 @@ void HWT901BSerialIO::ReadTaskLoop() {
       frame_buffer_[frame_length_++] = b;
 
       if (frame_length_ == HWT901BRawFrame::kLength) {
+#ifdef HALSER_DEBUG_SERIAL
+        // Off by default: at the module's normal output rate this is
+        // ~50 lines/sec, which floods the ESP-IDF log buffer
+        // (`/api/log`, ARCHITECTURE.md §2.1) fast enough to evict
+        // lower-frequency but more useful messages (e.g. the
+        // SignalK WS client's own warnings) within seconds. The raw
+        // frame is still visible in the web UI's Serial Log panel
+        // (SerialTerminal, §2.5) regardless of this flag, decoded via
+        // DescribeHWT901BFrame() -- this line duplicated that onto the
+        // console/LogBuffer too, which is what HALSER_DEBUG_SERIAL is
+        // for.
         ESP_LOGD(kSerialLogTag, "%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
                   frame_buffer_[0], frame_buffer_[1], frame_buffer_[2],
                   frame_buffer_[3], frame_buffer_[4], frame_buffer_[5],
                   frame_buffer_[6], frame_buffer_[7], frame_buffer_[8],
                   frame_buffer_[9], frame_buffer_[10]);
+#endif
 
         uint8_t type = frame_buffer_[1];
         if (ParseHWT901BFrame(frame_buffer_, frame_length_, &accumulated_reading_)) {

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.3] - 2026-09-08
+
+### Stop logging every received frame to the serial console by default
+
+The always-on per-frame RX hex dump (`ESP_LOGD`, present since v0.1.0)
+is ~50 lines/sec at the module's normal output rate — fast enough to
+flood the ESP-IDF log buffer (`/api/log`) and evict lower-frequency
+but more useful messages within seconds, which is exactly what
+happened while diagnosing the v0.2.2 issue: the `SENSESP_SK_WS_BUFFER_SIZE`
+warning was there, but the per-frame spam kept pushing it out of the
+buffer before it could be read.
+
+Now gated behind `HALSER_DEBUG_SERIAL` (`platformio.ini`, off by
+default), same as the rest of the verbose debug logging added in
+v0.2.0-debug. The raw frame is still visible, decoded, in the web
+UI's Serial Log panel regardless of this flag (v0.2.1) — this change
+only affects the console/`/api/log` copy of it.
+
 ## [0.2.2] - 2026-09-07
 
 ### Fix: SignalK output silently freezing after enabling raw magnetic field
