@@ -2,6 +2,7 @@
 
 #include <N2kMessages.h>
 #include <NMEA2000_esp32.h>
+#include <esp_log.h>
 #include <esp_mac.h>
 
 #include <cstdio>
@@ -72,6 +73,28 @@ constexpr size_t kNumBaudCandidates =
     sizeof(kBaudCandidates) / sizeof(kBaudCandidates[0]);
 constexpr unsigned long kBaudDetectTimeoutMs = 1000;
 
+// Last-resort recovery for a real bug in BoatHacks/SensESP's SKWSClient
+// (confirmed on real hardware, 2026-09-08): a send-side failure in
+// send_delta() -- by design (see SignalK/SensESP#1033) -- never routes
+// through on_disconnected()/on_error(), the only two places that set
+// connection_state_ back to kSKWSDisconnected. If the underlying
+// esp_websocket_client transport dies in a way that's only ever
+// observed via that send-side failure (not via its own async
+// disconnect/error event), connection_state_ stays stuck at whatever
+// it last was, SKWSClient::connect()'s "only run if Disconnected"
+// guard silently no-ops forever, and the device never reconnects on
+// its own -- confirmed to sit in this state indefinitely (>15 minutes
+// observed) with zero reconnect attempts, recovering only via a manual
+// power cycle. This is a genuine upstream state-desync bug, not
+// something this firmware's own code can correct by calling into
+// SKWSClient differently -- there's no public API to force it back to
+// Disconnected. A full device reboot is the only recovery available
+// from outside that class.
+constexpr unsigned long kWsWatchdogCheckIntervalMs = 30000;
+constexpr unsigned long kWsWatchdogRebootThresholdMs = 5 * 60 * 1000;
+constexpr const char* kWsWatchdogLogTag = "ws_watchdog";
+unsigned long last_ws_connected_ms = 0;
+
 /// Used for SetDeviceInformation()'s "unique number" — deliberately NOT
 /// the Precision-9 reference's hardcoded value (SPEC.md §10), so that
 /// two devices running this firmware don't collide on the same N2K bus.
@@ -101,6 +124,26 @@ void run_hwt901b_gateway() {
   // GPIO8 to show WiFi/WebSocket connection status, with no public hook
   // to share or override it. Fault indication (SPEC.md §6) is
   // SignalK-notification-only; see docs/plans/fault-indication.md.
+
+  // --- SignalK WebSocket watchdog (see kWsWatchdogRebootThresholdMs
+  // above for why this exists) ---
+  auto ws_client = sensesp_app->get_ws_client();
+  last_ws_connected_ms = millis();
+  event_loop()->onRepeat(kWsWatchdogCheckIntervalMs, [ws_client]() {
+    if (ws_client->get_connection_status() == "Connected") {
+      last_ws_connected_ms = millis();
+      return;
+    }
+    unsigned long down_for_ms = millis() - last_ws_connected_ms;
+    if (down_for_ms > kWsWatchdogRebootThresholdMs) {
+      ESP_LOGE(kWsWatchdogLogTag,
+                "SignalK WebSocket has been disconnected for %lums (over "
+                "the %lums threshold) -- rebooting to recover",
+                down_for_ms, kWsWatchdogRebootThresholdMs);
+      delay(200);  // let the log line actually flush before reset
+      ESP.restart();
+    }
+  });
 
   // --- Configuration (SPEC.md §7) ---
 
