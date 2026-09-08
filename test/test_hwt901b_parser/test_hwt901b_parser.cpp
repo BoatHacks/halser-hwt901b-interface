@@ -57,26 +57,51 @@ static void test_magnetic_packet_fills_mag_xyz(void) {
   TEST_ASSERT_EQUAL_INT32(89, r.mag_z);
 }
 
-static void test_gyro_packet_fills_gyro_z(void) {
+static void test_gyro_packet_fills_gyro_xyz(void) {
   uint8_t data[8] = {0};
-  Int16ToLE(0, data + 0);
-  Int16ToLE(0, data + 2);
+  Int16ToLE(8192, data + 0);   // 500 deg/s
+  Int16ToLE(-8192, data + 2);  // -500 deg/s
   Int16ToLE(16384, data + 4);  // 1000 deg/s
   uint8_t frame[11];
   BuildFrame(0x52, data, frame);
 
   ImuReading r;
   TEST_ASSERT_TRUE(ParseHWT901BFrame(frame, sizeof(frame), &r));
+  TEST_ASSERT_FLOAT_WITHIN(1.0f, 500.0f, r.gyro_x);
+  TEST_ASSERT_FLOAT_WITHIN(1.0f, -500.0f, r.gyro_y);
   TEST_ASSERT_FLOAT_WITHIN(1.0f, 1000.0f, r.gyro_z);
 }
 
-static void test_acceleration_packet_recognized_but_not_captured(void) {
+static void test_acceleration_packet_fills_accel_xyz(void) {
   uint8_t data[8] = {0};
+  Int16ToLE(16384, data + 0);  // 8g
+  Int16ToLE(-16384, data + 2); // -8g
+  Int16ToLE(32767, data + 4);  // ~16g
   uint8_t frame[11];
   BuildFrame(0x51, data, frame);
 
   ImuReading r;
   TEST_ASSERT_TRUE(ParseHWT901BFrame(frame, sizeof(frame), &r));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 8.0f, r.accel_x);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -8.0f, r.accel_y);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 16.0f, r.accel_z);
+}
+
+static void test_pressure_packet_fills_pressure_pa(void) {
+  uint8_t data[8] = {0};
+  // 101046 Pa, little-endian int32 -- matches a real captured frame
+  // (SPEC.md §11).
+  int32_t pressure = 101046;
+  data[0] = static_cast<uint8_t>(pressure & 0xFF);
+  data[1] = static_cast<uint8_t>((pressure >> 8) & 0xFF);
+  data[2] = static_cast<uint8_t>((pressure >> 16) & 0xFF);
+  data[3] = static_cast<uint8_t>((pressure >> 24) & 0xFF);
+  uint8_t frame[11];
+  BuildFrame(0x56, data, frame);
+
+  ImuReading r;
+  TEST_ASSERT_TRUE(ParseHWT901BFrame(frame, sizeof(frame), &r));
+  TEST_ASSERT_FLOAT_WITHIN(0.5f, 101046.0f, r.pressure_pa);
 }
 
 static void test_fields_accumulate_across_separate_packets(void) {
@@ -176,7 +201,7 @@ static void test_describe_gyro_frame(void) {
 
   char out[64];
   DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
-  TEST_ASSERT_TRUE(strstr(out, "gyro_z=1000.00") != nullptr);
+  TEST_ASSERT_TRUE(strstr(out, "z=1000.00") != nullptr);
 }
 
 static void test_describe_magnetic_frame(void) {
@@ -199,7 +224,22 @@ static void test_describe_acceleration_frame(void) {
 
   char out[64];
   DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
-  TEST_ASSERT_EQUAL_STRING("acceleration (not decoded)", out);
+  TEST_ASSERT_EQUAL_STRING("accel x=0.00 y=0.00 z=0.00 g", out);
+}
+
+static void test_describe_pressure_frame(void) {
+  uint8_t data[8] = {0};
+  int32_t pressure = 101046;
+  data[0] = static_cast<uint8_t>(pressure & 0xFF);
+  data[1] = static_cast<uint8_t>((pressure >> 8) & 0xFF);
+  data[2] = static_cast<uint8_t>((pressure >> 16) & 0xFF);
+  data[3] = static_cast<uint8_t>((pressure >> 24) & 0xFF);
+  uint8_t frame[11];
+  BuildFrame(0x56, data, frame);
+
+  char out[64];
+  DescribeHWT901BFrame(frame, sizeof(frame), out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("pressure=101046 Pa", out);
 }
 
 static void test_describe_invalid_frame(void) {
@@ -217,8 +257,9 @@ int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_angle_packet_fills_heading_roll_pitch);
   RUN_TEST(test_magnetic_packet_fills_mag_xyz);
-  RUN_TEST(test_gyro_packet_fills_gyro_z);
-  RUN_TEST(test_acceleration_packet_recognized_but_not_captured);
+  RUN_TEST(test_gyro_packet_fills_gyro_xyz);
+  RUN_TEST(test_acceleration_packet_fills_accel_xyz);
+  RUN_TEST(test_pressure_packet_fills_pressure_pa);
   RUN_TEST(test_fields_accumulate_across_separate_packets);
   RUN_TEST(test_bad_checksum_rejected);
   RUN_TEST(test_wrong_header_byte_rejected);
@@ -229,6 +270,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_describe_gyro_frame);
   RUN_TEST(test_describe_magnetic_frame);
   RUN_TEST(test_describe_acceleration_frame);
+  RUN_TEST(test_describe_pressure_frame);
   RUN_TEST(test_describe_invalid_frame);
   return UNITY_END();
 }

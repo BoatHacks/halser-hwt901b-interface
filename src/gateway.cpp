@@ -38,17 +38,24 @@ tNMEA2000* nmea2000 = nullptr;
 // own boilerplate (address claim, heartbeat, product/config info, which
 // it reports automatically). Passed to ExtendTransmitMessages() so PGN
 // 126464 ("PGN List - Transmit") queries — and any MFD/tool that uses
-// that list to decide what data sources a device offers — see all three,
+// that list to decide what data sources a device offers — see all four,
 // not just the boilerplate set. Unlike the HWT3100 fork this project is
 // adapted from, PGN 127257 (Attitude) is included: the WT901B's real
 // accelerometer makes this an honest addition (SPEC.md §5.1, §9.3).
-// 0-terminated per the library's own convention; must outlive the call
-// (the library stores the pointer, not a copy), hence file-scope rather
-// than local.
-const unsigned long kTransmitMessages[] PROGMEM = {127250L, 127251L, 127257L, 0};
+// PGN 130314 (Actual Pressure) is sourced from the WT901B's barometer
+// (SPEC.md §3, §5.1). 0-terminated per the library's own convention;
+// must outlive the call (the library stores the pointer, not a copy),
+// hence file-scope rather than local.
+const unsigned long kTransmitMessages[] PROGMEM = {127250L, 127251L, 127257L, 130314L, 0};
 
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegreesToRadians = kPi / 180.0f;
+
+// Converts the WT901B's raw accelerometer readings (g) to SI units for
+// the diagnostic sensors.hwt901b.acceleration.* SignalK outputs
+// (SPEC.md §5.2) -- unlike raw magnetic field, the accel scale factor
+// is known, so there's no reason to publish non-SI units here.
+constexpr float kGToMetersPerSecondSquared = 9.80665f;
 
 // Matches N2kHeadingSender's ExpiringValue expiry (SPEC.md §6, §10): the
 // SignalK meta.timeout advisory should agree with when N2K actually
@@ -183,6 +190,16 @@ void run_hwt901b_gateway() {
       ->set_config_schema(
           R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
 
+  auto n2k_pressure_pgn_enabled = std::make_shared<PersistingObservableValue<bool>>(
+      true, "/n2k/pressure_pgn_enabled");
+  ConfigItem(n2k_pressure_pgn_enabled)
+      ->set_title("Enable PGN 130314 (Actual Pressure)")
+      ->set_description(
+          "Atmospheric pressure from the WT901B's barometer (SPEC.md §5.1).")
+      ->set_sort_order(113)
+      ->set_config_schema(
+          R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
+
   auto signalk_enabled = std::make_shared<PersistingObservableValue<bool>>(
       true, "/signalk/enabled");
   ConfigItem(signalk_enabled)
@@ -236,19 +253,61 @@ void run_hwt901b_gateway() {
       ->set_config_schema(
           R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
 
+  auto sk_pressure_enabled = std::make_shared<PersistingObservableValue<bool>>(
+      true, "/signalk/pressure_enabled");
+  ConfigItem(sk_pressure_enabled)
+      ->set_title("Enable environment.outside.pressure")
+      ->set_description(
+          "Atmospheric pressure from the WT901B's barometer (SPEC.md §5.1).")
+      ->set_sort_order(125)
+      ->set_config_schema(
+          R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
+
   // Raw magnetic field as SignalK deltas (SPEC.md §5.2) — diagnostic
-  // data with no established SignalK path, so it's off by default and
-  // gated separately from signalk_enabled (both must be true to
-  // publish).
+  // data with no established SignalK path, gated separately from
+  // signalk_enabled (both must be true to publish). On by default: the
+  // signalk-hwt901b-calibration plugin needs this to visualize magnetic
+  // field calibration quality, which is a routine part of installing
+  // this firmware, not an edge case -- unlike raw gyro/accel below,
+  // which stay off by default since nothing depends on them yet.
   auto raw_mag_field_enabled = std::make_shared<PersistingObservableValue<bool>>(
-      false, "/signalk/raw_mag_field_enabled");
+      true, "/signalk/raw_mag_field_enabled");
   ConfigItem(raw_mag_field_enabled)
       ->set_title("Enable Raw Magnetic Field SignalK Output")
       ->set_description(
           "Publishes sensors.hwt901b.magneticField.x/y/z -- raw, "
           "uncalibrated sensor counts from the WT901B (SPEC.md §5.2). "
+          "Diagnostic-only; on by default so the calibration visualizer "
+          "webapp works out of the box.")
+      ->set_sort_order(126)
+      ->set_config_schema(
+          R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
+
+  // Raw gyro/accelerometer as SignalK deltas -- same diagnostic-only
+  // treatment as raw magnetic field above: no established SignalK path
+  // for raw angular rate or acceleration on a vessel, so these are
+  // custom sensors.* paths, off by default (SPEC.md §5.2).
+  auto raw_gyro_enabled = std::make_shared<PersistingObservableValue<bool>>(
+      false, "/signalk/raw_gyro_enabled");
+  ConfigItem(raw_gyro_enabled)
+      ->set_title("Enable Raw Angular Rate SignalK Output")
+      ->set_description(
+          "Publishes sensors.hwt901b.angularRate.x/y/z -- raw gyroscope "
+          "readings from the WT901B, rad/s (SPEC.md §5.2). Diagnostic-only; "
+          "z duplicates navigation.rateOfTurn. Off by default.")
+      ->set_sort_order(127)
+      ->set_config_schema(
+          R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
+
+  auto raw_accel_enabled = std::make_shared<PersistingObservableValue<bool>>(
+      false, "/signalk/raw_accel_enabled");
+  ConfigItem(raw_accel_enabled)
+      ->set_title("Enable Raw Acceleration SignalK Output")
+      ->set_description(
+          "Publishes sensors.hwt901b.acceleration.x/y/z -- raw "
+          "accelerometer readings from the WT901B, m/s^2 (SPEC.md §5.2). "
           "Diagnostic-only; off by default.")
-      ->set_sort_order(125)
+      ->set_sort_order(128)
       ->set_config_schema(
           R"schema({"type":"object","properties":{"value":{"title":"Enabled","type":"boolean"}}})schema");
 
@@ -354,11 +413,12 @@ void run_hwt901b_gateway() {
   auto heading_sender = new halser::N2kHeadingSender(nmea2000);
   auto rate_of_turn_sender = new halser::N2kRateOfTurnSender(nmea2000);
   auto attitude_sender = new halser::N2kAttitudeSender(nmea2000);
+  auto pressure_sender = new halser::N2kPressureSender(nmea2000);
 
   event_loop()->onRepeat(100, [heading_sender, rate_of_turn_sender, attitude_sender,
-                                n2k_enabled, n2k_heading_pgn_enabled,
+                                pressure_sender, n2k_enabled, n2k_heading_pgn_enabled,
                                 n2k_rate_of_turn_pgn_enabled,
-                                n2k_attitude_pgn_enabled]() {
+                                n2k_attitude_pgn_enabled, n2k_pressure_pgn_enabled]() {
     if (n2k_enabled->get() && n2k_heading_pgn_enabled->get()) {
       heading_sender->send();
     }
@@ -367,6 +427,9 @@ void run_hwt901b_gateway() {
     }
     if (n2k_enabled->get() && n2k_attitude_pgn_enabled->get()) {
       attitude_sender->send();
+    }
+    if (n2k_enabled->get() && n2k_pressure_pgn_enabled->get()) {
+      pressure_sender->send();
     }
   });
 
@@ -407,6 +470,59 @@ void run_hwt901b_gateway() {
   auto sk_attitude_output = new SKOutputRawJson(
       "navigation.attitude", "/signalk/attitude_path",
       new SKMetadata("rad", "", "", "", kHeadingTimeoutSeconds));
+
+  // environment.outside.pressure (SPEC.md §5.1): real data, from the
+  // WT901B's barometer (0x56 packet) -- unlike the raw magnetic field
+  // below, Pascals is a well-defined physical unit, so this is a
+  // standard SignalK path, not a diagnostic sensors.* one.
+  auto sk_pressure_output = new SKOutputFloat(
+      "environment.outside.pressure", "/signalk/pressure_path",
+      new SKMetadata("Pa", "", "", "", kHeadingTimeoutSeconds));
+
+  // Raw gyro/accelerometer (SPEC.md §5.2): same diagnostic-only,
+  // custom sensors.* treatment as the raw magnetic field below -- no
+  // established SignalK path for raw angular rate or acceleration on a
+  // vessel. Converted to SI units (rad/s, m/s^2) at this boundary,
+  // unlike magnetic field's raw counts, since the WT901B's own gyro/
+  // accel scale factors are known (unlike its mag-to-µT factor).
+  auto sk_gyro_x_output = new SKOutputFloat(
+      "sensors.hwt901b.angularRate.x", "/signalk/gyro_x_path",
+      new SKMetadata(
+          "rad/s", "Gyro X",
+          "Raw roll-axis angular rate from the WT901B's gyroscope. Diagnostic-only.",
+          "GyroX", kHeadingTimeoutSeconds));
+  auto sk_gyro_y_output = new SKOutputFloat(
+      "sensors.hwt901b.angularRate.y", "/signalk/gyro_y_path",
+      new SKMetadata(
+          "rad/s", "Gyro Y",
+          "Raw pitch-axis angular rate from the WT901B's gyroscope. Diagnostic-only.",
+          "GyroY", kHeadingTimeoutSeconds));
+  auto sk_gyro_z_output = new SKOutputFloat(
+      "sensors.hwt901b.angularRate.z", "/signalk/gyro_z_path",
+      new SKMetadata(
+          "rad/s", "Gyro Z",
+          "Raw yaw-axis angular rate from the WT901B's gyroscope -- duplicates "
+          "navigation.rateOfTurn (same source), kept for diagnostic parity with "
+          "the X/Y axes. Diagnostic-only.",
+          "GyroZ", kHeadingTimeoutSeconds));
+  auto sk_accel_x_output = new SKOutputFloat(
+      "sensors.hwt901b.acceleration.x", "/signalk/accel_x_path",
+      new SKMetadata(
+          "m/s2", "Accel X",
+          "Raw X-axis reading from the WT901B's accelerometer. Diagnostic-only.",
+          "AccelX", kHeadingTimeoutSeconds));
+  auto sk_accel_y_output = new SKOutputFloat(
+      "sensors.hwt901b.acceleration.y", "/signalk/accel_y_path",
+      new SKMetadata(
+          "m/s2", "Accel Y",
+          "Raw Y-axis reading from the WT901B's accelerometer. Diagnostic-only.",
+          "AccelY", kHeadingTimeoutSeconds));
+  auto sk_accel_z_output = new SKOutputFloat(
+      "sensors.hwt901b.acceleration.z", "/signalk/accel_z_path",
+      new SKMetadata(
+          "m/s2", "Accel Z",
+          "Raw Z-axis reading from the WT901B's accelerometer. Diagnostic-only.",
+          "AccelZ", kHeadingTimeoutSeconds));
 
   // Raw magnetic field (SPEC.md §5.2): custom sensors.* paths, no
   // established standard, no unit (the register protocol docs don't
@@ -526,6 +642,27 @@ void run_hwt901b_gateway() {
           sk_mag_x_output->set(static_cast<float>(corrected.mag_x));
           sk_mag_y_output->set(static_cast<float>(corrected.mag_y));
           sk_mag_z_output->set(static_cast<float>(corrected.mag_z));
+        }
+
+        // Pressure: real data (SPEC.md §5.1), already in Pascals
+        // internally -- no conversion needed at this boundary, unlike
+        // heading/gyro/accel.
+        pressure_sender->pressure_.update(corrected.pressure_pa);
+        if (signalk_enabled->get() && sk_pressure_enabled->get()) {
+          sk_pressure_output->set(corrected.pressure_pa);
+        }
+
+        // Raw gyro/accel (SPEC.md §5.2): diagnostic-only, converted to
+        // SI units at this boundary same as every other output.
+        if (signalk_enabled->get() && raw_gyro_enabled->get()) {
+          sk_gyro_x_output->set(corrected.gyro_x * kDegreesToRadians);
+          sk_gyro_y_output->set(corrected.gyro_y * kDegreesToRadians);
+          sk_gyro_z_output->set(corrected.gyro_z * kDegreesToRadians);
+        }
+        if (signalk_enabled->get() && raw_accel_enabled->get()) {
+          sk_accel_x_output->set(corrected.accel_x * kGToMetersPerSecondSquared);
+          sk_accel_y_output->set(corrected.accel_y * kGToMetersPerSecondSquared);
+          sk_accel_z_output->set(corrected.accel_z * kGToMetersPerSecondSquared);
         }
       }));
 

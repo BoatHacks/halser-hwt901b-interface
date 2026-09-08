@@ -123,6 +123,28 @@ class N2kAttitudeSender {
   tNMEA2000* nmea2000_;
 };
 
+/// PGN 130314 — Actual Pressure (atmospheric), sourced from the WT901B's
+/// barometer (0x56 packet, SPEC.md §3, §5.1) — real data, unlike the
+/// magnetic field's raw diagnostic counts, since Pascals is a
+/// well-defined physical unit with an established SignalK/N2K meaning
+/// regardless of sensor calibration.
+class N2kPressureSender {
+ public:
+  explicit N2kPressureSender(tNMEA2000* nmea2000, unsigned long expiry = 5000)
+      : nmea2000_(nmea2000), pressure_(expiry) {}
+
+  void send() {
+    tN2kMsg msg;
+    SetN2kPGN130314(msg, 0xff, 0, N2kps_Atmospheric, pressure_.to_n2k());
+    nmea2000_->SendMsg(msg);
+  }
+
+  ExpiringValue<float> pressure_;
+
+ private:
+  tNMEA2000* nmea2000_;
+};
+
 }  // namespace halser
 
 #endif  // HALSER_SRC_N2K_SENDERS_H_

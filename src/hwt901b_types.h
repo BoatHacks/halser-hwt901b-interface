@@ -12,10 +12,16 @@ struct ImuReading {
   float heading = 0.0f;  // degrees, 0-360, magnetic, offset-corrected
   float roll = 0.0f;     // degrees, -180..180, positive = starboard down
   float pitch = 0.0f;    // degrees, -90..90, positive = bow up
-  float gyro_z = 0.0f;   // degrees/second, raw yaw-axis angular rate (§1.3)
+  float gyro_x = 0.0f;   // degrees/second, raw roll-axis angular rate, diagnostic use only
+  float gyro_y = 0.0f;   // degrees/second, raw pitch-axis angular rate, diagnostic use only
+  float gyro_z = 0.0f;   // degrees/second, raw yaw-axis angular rate (§1.3) -- feeds rate of turn
+  float accel_x = 0.0f;  // g, raw accelerometer X, diagnostic use only
+  float accel_y = 0.0f;  // g, raw accelerometer Y, diagnostic use only
+  float accel_z = 0.0f;  // g, raw accelerometer Z, diagnostic use only
   int32_t mag_x = 0;     // raw magnetic field X, diagnostic use only
   int32_t mag_y = 0;     // raw magnetic field Y, diagnostic use only
   int32_t mag_z = 0;     // raw magnetic field Z, diagnostic use only
+  float pressure_pa = 0.0f;  // Pascals, atmospheric pressure from the 0x56 packet
   unsigned long timestamp = 0;  // millis() of last packet contributing here
 };
 

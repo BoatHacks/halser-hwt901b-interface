@@ -9,9 +9,16 @@ int16_t ReadInt16LE(const uint8_t* p) {
                                (static_cast<uint16_t>(p[1]) << 8));
 }
 
+int32_t ReadInt32LE(const uint8_t* p) {
+  return static_cast<int32_t>(
+      static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
+      (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24));
+}
+
 // Scale factors per WitMotion's register protocol documentation.
-constexpr float kAngleScale = 180.0f / 32768.0f;       // §11: unverified
-constexpr float kGyroScale = 2000.0f / 32768.0f;       // §11: unverified
+constexpr float kAngleScale = 180.0f / 32768.0f;   // §11: unverified
+constexpr float kGyroScale = 2000.0f / 32768.0f;   // §11: unverified
+constexpr float kAccelScale = 16.0f / 32768.0f;    // §11: unverified, +-16g range
 
 }  // namespace
 
@@ -28,14 +35,22 @@ bool ParseHWT901BFrame(const uint8_t* frame, size_t len, ImuReading* out) {
   const uint8_t* data = frame + 2;  // 8 data bytes
 
   switch (static_cast<HWT901BPacketType>(type)) {
-    case HWT901BPacketType::kAcceleration:
-      // Acceleration isn't part of ImuReading (SPEC.md §3 — not consumed
-      // by anything this firmware outputs); still a recognized/valid
-      // frame type, so this returns true with *out unchanged.
+    case HWT901BPacketType::kAcceleration: {
+      int16_t ax = ReadInt16LE(data + 0);
+      int16_t ay = ReadInt16LE(data + 2);
+      int16_t az = ReadInt16LE(data + 4);
+      out->accel_x = static_cast<float>(ax) * kAccelScale;
+      out->accel_y = static_cast<float>(ay) * kAccelScale;
+      out->accel_z = static_cast<float>(az) * kAccelScale;
       return true;
+    }
 
     case HWT901BPacketType::kAngularVelocity: {
+      int16_t wx = ReadInt16LE(data + 0);
+      int16_t wy = ReadInt16LE(data + 2);
       int16_t wz = ReadInt16LE(data + 4);
+      out->gyro_x = static_cast<float>(wx) * kGyroScale;
+      out->gyro_y = static_cast<float>(wy) * kGyroScale;
       out->gyro_z = static_cast<float>(wz) * kGyroScale;
       return true;
     }
@@ -60,6 +75,15 @@ bool ParseHWT901BFrame(const uint8_t* frame, size_t len, ImuReading* out) {
       return true;
     }
 
+    case HWT901BPacketType::kPressure: {
+      // bytes[0..3] pressure (Pa, int32 LE); bytes[4..7] height (cm,
+      // int32 LE, sea-level-referenced) -- deliberately not read, see
+      // ParseHWT901BFrame()'s doc comment (hwt901b_parser.h).
+      int32_t pressure = ReadInt32LE(data + 0);
+      out->pressure_pa = static_cast<float>(pressure);
+      return true;
+    }
+
     default:
       return false;
   }
@@ -76,11 +100,13 @@ void DescribeHWT901BFrame(const uint8_t* frame, size_t len, char* out, size_t ou
 
   switch (static_cast<HWT901BPacketType>(frame[1])) {
     case HWT901BPacketType::kAcceleration:
-      snprintf(out, out_len, "acceleration (not decoded)");
+      snprintf(out, out_len, "accel x=%.2f y=%.2f z=%.2f g", reading.accel_x,
+               reading.accel_y, reading.accel_z);
       break;
 
     case HWT901BPacketType::kAngularVelocity:
-      snprintf(out, out_len, "gyro_z=%.2f deg/s", reading.gyro_z);
+      snprintf(out, out_len, "gyro x=%.2f y=%.2f z=%.2f deg/s", reading.gyro_x,
+               reading.gyro_y, reading.gyro_z);
       break;
 
     case HWT901BPacketType::kAngle:
@@ -92,6 +118,11 @@ void DescribeHWT901BFrame(const uint8_t* frame, size_t len, char* out, size_t ou
       snprintf(out, out_len, "mag x=%ld y=%ld z=%ld",
                static_cast<long>(reading.mag_x), static_cast<long>(reading.mag_y),
                static_cast<long>(reading.mag_z));
+      break;
+
+    case HWT901BPacketType::kPressure:
+      snprintf(out, out_len, "pressure=%ld Pa",
+               static_cast<long>(reading.pressure_pa));
       break;
   }
 }

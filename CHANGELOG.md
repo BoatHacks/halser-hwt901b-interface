@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0] - 2026-09-08
+
+### Pressure, raw gyro, and raw acceleration; raw magnetic field on by default
+
+New sensor outputs, all parsed from packet types the WT901B was already
+streaming but this firmware previously discarded or never recognized:
+
+- **`0x56` (Pressure) packets are now parsed.** Real data — pressure in
+  Pascals, transmitted as N2K PGN 130314 (Actual Pressure) and SignalK
+  `environment.outside.pressure`, both on by default. A real captured
+  frame decoded to a plausible atmospheric value (~101 kPa), which is
+  at least consistent with the assumed frame layout (SPEC.md §11). The
+  packet's "height" field (pressure-derived altitude against a fixed
+  sea-level reference) is deliberately not parsed or exposed — a
+  vessel's elevation isn't a meaningful instrument reading.
+- **Gyro X/Y and full acceleration X/Y/Z are now captured** (gyro Z was
+  already used for rate of turn; acceleration was previously recognized
+  but discarded entirely). Published as diagnostic-only SignalK deltas,
+  off by default: `sensors.hwt901b.angularRate.x/y/z` (rad/s),
+  `sensors.hwt901b.acceleration.x/y/z` (m/s²).
+- **Raw magnetic field SignalK output (`sensors.hwt901b.magneticField.x/y/z`)
+  is now on by default**, changed from off — the
+  `signalk-hwt901b-calibration` webapp depends on it, and installing
+  that webapp is a routine part of setting this firmware up, not an
+  edge case.
+
+See SPEC.md §3, §5.1, §5.2, §7 and ARCHITECTURE.md §2.4, §2.7 for
+details.
+
 ## [0.2.4] - 2026-09-08
 
 ### Add SignalK WebSocket watchdog to recover from a SensESP state-desync bug

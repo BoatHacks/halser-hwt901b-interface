@@ -170,14 +170,17 @@ real (§5.1, §9.3, §10).
 | heading   | float | Magnetic heading, degrees, 0–360, offset-corrected — internal representation throughout the pipeline, matching the WT901B's own angle-packet scale. N2K/SignalK both require radians; converted once, at each output boundary. |
 | roll      | float | Degrees, -180..180. New in this fork (§1.3, §9.3). |
 | pitch     | float | Degrees, -90..90. New in this fork. |
-| gyro\_z   | float | Degrees/second, raw yaw-axis angular rate — feeds rate of turn (§1.3, §5.1). New in this fork; replaces the parent project's computed sliding-window estimate. |
+| gyro\_x, gyro\_y | float | Degrees/second, raw roll-/pitch-axis angular rate, diagnostic use only (§5.2). |
+| gyro\_z   | float | Degrees/second, raw yaw-axis angular rate — feeds rate of turn (§1.3, §5.1). Replaces the parent project's computed sliding-window estimate. |
+| accelX, accelY, accelZ | float | g, raw accelerometer components, diagnostic use only (§5.2). |
 | magX, magY, magZ | int | Raw magnetic field components, diagnostic use only (§5, §10) |
+| pressure\_pa | float | Pascals, atmospheric pressure from the module's barometer (`0x56` packet) — real data, feeds PGN 130314 / `environment.outside.pressure` (§5.1). |
 | timestamp | uint  | Millis of last packet contributing to this reading (for staleness) |
 
-Acceleration (the `0x51` packet) is recognized by the parser as a valid
-frame but not captured into `ImuReading` — nothing in this firmware's
-output set consumes raw acceleration directly (roll/pitch already come
-pre-fused from the module's own `0x53` angle packet).
+Height (the `0x56` packet's second field, a sea-level-referenced
+altitude estimate derived from pressure) is deliberately not parsed or
+exposed anywhere — a vessel's elevation isn't a meaningful instrument
+reading, unlike pressure itself (§5.1).
 
 ### CalibrationOffset (config, persisted)
 
@@ -215,7 +218,7 @@ estimate.
 
 ### 5.1 N2K Output
 
-Presents as a B&G Precision-9 compass (§1.2). Three PGNs implemented:
+Presents as a B&G Precision-9 compass (§1.2). Four PGNs implemented:
 
 - **PGN 127250 — Vessel Heading**: real data, radians (converted from
   the firmware's internal degrees at this boundary). Deviation is always
@@ -232,9 +235,12 @@ Presents as a B&G Precision-9 compass (§1.2). Three PGNs implemented:
   about this PGN too (§1.2, §10). Yaw is always "not available" — PGN
   127250 already carries heading, and duplicating it into Attitude's Yaw
   field isn't verified against how a real Precision-9 behaves (§11).
+- **PGN 130314 — Actual Pressure**: real data, atmospheric pressure from
+  the WT901B's barometer (`0x56` packet). `PressureSource` is always
+  Atmospheric; `PressureInstance` is always `0`.
 
-All three PGNs are independently selectable in the config UI on top of
-the master N2K enable/disable switch (§7), and all three are declared to
+All four PGNs are independently selectable in the config UI on top of
+the master N2K enable/disable switch (§7), and all four are declared to
 `ExtendTransmitMessages()` so PGN 126464 ("PGN List — Transmit") reports
 them correctly (same requirement/rationale as the parent project's
 ARCHITECTURE.md §2.4).
@@ -257,10 +263,20 @@ passive/read-only — never transmits PGN 127258 itself.
   object, radians, yaw always `0`. SensESP has no dedicated
   attitude-output class (unlike its numeric `SKOutputFloat`), so this is
   published via `SKOutputRawJson` — see ARCHITECTURE.md §2.7.
+- `environment.outside.pressure` (Pa) — real data, from the WT901B's
+  barometer. Standard SignalK path (unlike the diagnostic sensors below),
+  on by default, same as heading/rate-of-turn/attitude.
 - Raw magnetic field: `sensors.hwt901b.magneticField.x/y/z`, same
   diagnostic-only treatment as the parent project's
-  `sensors.hwt3100.magneticField.*` (raw counts, no unit, off by
-  default).
+  `sensors.hwt3100.magneticField.*` (raw counts, no unit). **On by
+  default as of 0.3.0** — unlike the other diagnostic outputs below,
+  the `signalk-hwt901b-calibration` webapp depends on this path, and
+  installing that webapp is a routine part of setting this firmware up.
+- Raw gyro: `sensors.hwt901b.angularRate.x/y/z` (rad/s), diagnostic-only,
+  off by default. Z duplicates `navigation.rateOfTurn` (same source),
+  kept for parity with X/Y.
+- Raw acceleration: `sensors.hwt901b.acceleration.x/y/z` (m/s²),
+  diagnostic-only, off by default.
 
 Staleness surfaced via `meta.timeout`, same mechanism as the parent
 project (§6).
@@ -282,12 +298,13 @@ ephemeral.
 
 User-tunable, exposed via the SensESP web UI:
 
-- Enable/disable N2K output (master), plus PGN 127250/127251/127257
+- Enable/disable N2K output (master), plus PGN 127250/127251/127257/130314
   independently.
 - Enable/disable SignalK output (master), plus
   `navigation.headingMagnetic`, `navigation.rateOfTurn`,
-  `navigation.headingTrue`, `navigation.attitude`, and the raw magnetic
-  field deltas independently.
+  `navigation.headingTrue`, `navigation.attitude`,
+  `environment.outside.pressure`, and the raw magnetic field/angular
+  rate/acceleration deltas independently.
 - Calibration offset: heading.
 - On-module output bandwidth (BANDWIDTH register, §8.2a) and output
   rate (RRATE register, §8.2b), and UART baud rate (BAUD register,
@@ -387,27 +404,33 @@ path (never existed even in the parent project's implementation).
 
 ### 9.1 MVP Features
 
-- Read heading, roll, pitch, rate of turn (real gyro), and raw magnetic
-  field from the WT901B over serial.
+- Read heading, roll, pitch, rate of turn (real gyro), raw gyro/
+  acceleration, raw magnetic field, and atmospheric pressure from the
+  WT901B over serial.
 - Apply a configurable heading calibration offset.
-- Transmit heading (PGN 127250), rate of turn (PGN 127251), and attitude
-  (PGN 127257) — all independently toggleable, plus a master N2K
-  enable/disable switch.
+- Transmit heading (PGN 127250), rate of turn (PGN 127251), attitude
+  (PGN 127257), and pressure (PGN 130314) — all independently
+  toggleable, plus a master N2K enable/disable switch.
 - Present as a B&G Precision-9 on the N2K bus.
-- Transmit heading, rate of turn, true heading, and attitude via
-  SignalK deltas, independently toggleable.
+- Transmit heading, rate of turn, true heading, attitude, and pressure
+  via SignalK deltas, independently toggleable.
 - Detect stale sensor data and indicate it (N2K "not available" +
   SignalK `meta.timeout`).
-- Live serial terminal (hex frames) in the web UI.
+- Live serial terminal (hex frames + decoded values) in the web UI.
 - In-place calibration commands: two named, allowlisted CALSW/SAVE
   register-write actions.
 - MFD-triggered calibration start/stop over N2K, unverified against real
   hardware.
 - On-module output bandwidth, output rate, and UART baud: persisted
   config, auto-detected/learned where applicable.
-- Raw magnetic field as SignalK deltas, independently toggleable.
+- Raw magnetic field as SignalK deltas, independently toggleable, on by
+  default. Raw gyro/acceleration as SignalK deltas, independently
+  toggleable, off by default.
 - Bus-sourced magnetic variation (listened for, never transmitted):
   fills PGN 127250's Variation field, enables `navigation.headingTrue`.
+- SignalK WebSocket watchdog: reboots the device if the connection stays
+  down for more than 5 minutes (recovers from a known SensESP bug,
+  ARCHITECTURE.md §2.7).
 - OTA firmware upgrades (SensESP built-in).
 
 ### 9.2 Post-MVP / Deferred
@@ -491,12 +514,16 @@ Everything in this section reflects genuine gaps I could not close
 without physical WT901B hardware:
 
 - **Register values and scale factors** (frame format, CALSW=7/0,
-  RRATE/BAUD/BANDWIDTH code tables, angle/gyro scale factors) are taken
-  from WitMotion's publicly documented register protocol and mirrored
-  open-source implementations, **not verified against a physical WT901B
-  in this environment.** The parent HWT3100 project's own history (its
-  line format was wrong until checked against a real device) is a
-  direct warning that this class of detail has been wrong before.
+  RRATE/BAUD/BANDWIDTH code tables, angle/gyro/accelerometer scale
+  factors) are taken from WitMotion's publicly documented register
+  protocol and mirrored open-source implementations, **not verified
+  against a physical WT901B in this environment.** The parent HWT3100
+  project's own history (its line format was wrong until checked
+  against a real device) is a direct warning that this class of detail
+  has been wrong before. Pressure (`0x56`) is a partial exception: a
+  real captured frame decoded to a plausible atmospheric value (~101
+  kPa), which is at least consistent with the assumed int32-Pa layout,
+  though not proof the scale/offset are exactly right.
 - **Heading/rate-of-turn sign convention** — carried over from the
   HWT3100's confirmed finding, not independently verified for the
   WT901B's AHRS-fused yaw or its gyro axis polarity (§10).

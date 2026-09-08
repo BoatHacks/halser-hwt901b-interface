@@ -205,8 +205,13 @@ fields pass through unchanged — only heading is offset-corrected
 - `N2kAttitudeSender` — PGN 127257, **new in this fork**. Same
   `ExpiringValue<T>` pattern as the other two senders, fed by real
   roll/pitch. Yaw is always `N2kDoubleNA` (SPEC.md §5.1, §11).
+- `N2kPressureSender` — PGN 130314 (Actual Pressure), **new in this
+  fork**, fed by `ImuReading.pressure_pa` (already Pascals, no
+  conversion needed at this boundary). `PressureSource` is always
+  `N2kps_Atmospheric`; `PressureInstance` is always `0` (this firmware
+  has exactly one pressure sensor).
 
-All three PGNs declared to `tNMEA2000::ExtendTransmitMessages()` (SPEC.md
+All four PGNs declared to `tNMEA2000::ExtendTransmitMessages()` (SPEC.md
 §5.1, same requirement/rationale as the parent project's ARCHITECTURE.md
 §2.4).
 
@@ -259,10 +264,19 @@ modification, pure N2K plumbing (PGN 127258 listener, read-only).
 ### 2.7 SignalK Delta Sender
 
 Publishes `navigation.headingMagnetic`, `navigation.rateOfTurn`,
-`navigation.headingTrue`, `navigation.attitude`, and
-`sensors.hwt901b.magneticField.x/y/z` via SensESP's existing SignalK/
+`navigation.headingTrue`, `navigation.attitude`,
+`environment.outside.pressure`, `sensors.hwt901b.magneticField.x/y/z`,
+`sensors.hwt901b.angularRate.x/y/z`, and
+`sensors.hwt901b.acceleration.x/y/z` via SensESP's existing SignalK/
 WiFi transport. Each has its own enable flag, same master-plus-per-
 output pattern as the parent project's ARCHITECTURE.md §2.7.
+`environment.outside.pressure` is real data (SPEC.md §5.1, on by
+default, same as heading/rate-of-turn/attitude); the raw angular
+rate/acceleration paths are diagnostic-only (SPEC.md §5.2, off by
+default, same treatment as raw magnetic field). Raw magnetic field
+itself is on by default as of this fork's 0.3.0 release — the
+`signalk-hwt901b-calibration` webapp needs it, and installing that
+webapp is a routine part of setting this firmware up, not an edge case.
 
 `navigation.attitude` is new in this fork and is the one output that
 doesn't fit SensESP's `SKOutputNumeric<T>`/`SKOutputFloat` family
@@ -306,10 +320,16 @@ struct ImuReading {
   float heading = 0.0f;  // degrees, 0-360, magnetic, offset-corrected
   float roll = 0.0f;     // degrees, -180..180
   float pitch = 0.0f;    // degrees, -90..90
-  float gyro_z = 0.0f;   // degrees/second, raw yaw-axis rate
+  float gyro_x = 0.0f;   // degrees/second, raw roll-axis rate, diagnostic use only
+  float gyro_y = 0.0f;   // degrees/second, raw pitch-axis rate, diagnostic use only
+  float gyro_z = 0.0f;   // degrees/second, raw yaw-axis rate -- feeds rate of turn
+  float accel_x = 0.0f;  // g, raw accelerometer X, diagnostic use only
+  float accel_y = 0.0f;  // g, raw accelerometer Y, diagnostic use only
+  float accel_z = 0.0f;  // g, raw accelerometer Z, diagnostic use only
   int32_t mag_x = 0;     // raw magnetic field X, diagnostic use only
   int32_t mag_y = 0;     // raw magnetic field Y, diagnostic use only
   int32_t mag_z = 0;     // raw magnetic field Z, diagnostic use only
+  float pressure_pa = 0.0f;  // Pascals, atmospheric pressure (0x56 packet)
   unsigned long timestamp = 0;  // millis() of last packet contributing here
 };
 
