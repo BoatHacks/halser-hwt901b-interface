@@ -189,10 +189,10 @@ change), accepted rather than solved with extra synchronization.
 Unchanged in shape from the parent project (`calibration_offset.h`):
 applies the configured heading offset to each `ImuReading` before either
 output path, negating the raw yaw axis first (SPEC.md §2, §10 — the sign
-convention is carried over from the HWT3100's confirmed finding, flagged
-unverified for the WT901B in SPEC.md §11). Roll, pitch, gyro, and mag
-fields pass through unchanged — only heading is offset-corrected
-(SPEC.md §9).
+convention is carried over from the HWT3100's confirmed finding, and now
+independently confirmed for the WT901B too, SPEC.md §11). Roll, pitch,
+gyro, and mag fields pass through unchanged — only heading is
+offset-corrected (SPEC.md §9).
 
 ### 2.4 N2K Senders (`n2k_senders.h`)
 

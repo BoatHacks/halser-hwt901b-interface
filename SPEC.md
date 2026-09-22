@@ -484,17 +484,19 @@ None at this version — see §9.1.
   simply re-running start/stop (§11) — rather than guess a register
   value for a firmware feature that writes to real hardware, this
   fork ships with two calibration actions, not three.
-- **Rate-of-turn sign convention is carried over from the HWT3100's
-  confirmed-on-real-hardware finding, unverified for the WT901B.** The
-  parent project confirmed (on real hardware) that its raw Yaw axis
-  increases counterclockwise, opposite N2K/SignalK's convention, and
-  negates accordingly. This fork applies the same negation to both
-  heading and `gyro_z`, for internal consistency — but this is an
-  assumption carried across products, not an independently-confirmed
-  WT901B finding. See §11 and the parent project's own history (its
-  CHANGELOG records a case where exactly this kind of manual-derived
-  assumption was wrong until checked against a real device) as the
-  reason this is flagged rather than asserted.
+- **Heading sign convention confirmed on real WT901B hardware
+  (2026-09-22): raw fused yaw increases counterclockwise**, the same
+  convention the HWT3100 fork confirmed for its own hardware, opposite
+  N2K/SignalK's clockwise-positive convention. Confirmed by rotating a
+  physical module clockwise (with roll/pitch held flat, away from
+  magnetic interference — an earlier attempt near stray magnets gave a
+  false reading in the opposite direction, a direct illustration of
+  why this needed independent verification rather than being assumed)
+  and observing the raw parsed heading decrease accordingly. This fork
+  applies the same negation to both heading and `gyro_z`, for internal
+  consistency — the negation itself is now confirmed correct for
+  heading; `gyro_z`'s sign is inferred from sharing the same physical
+  yaw axis, not independently tested against a known turn direction.
 - **Baud/bandwidth/rate command formatters never expose the
   protocol's "dangerous" values** (factory-reset SAVE, "no output"
   RRATE code), the same posture the parent project took with `AT+MODE`
@@ -516,17 +518,24 @@ without physical WT901B hardware:
 - **Register values and scale factors** (frame format, CALSW=7/0,
   RRATE/BAUD/BANDWIDTH code tables, angle/gyro/accelerometer scale
   factors) are taken from WitMotion's publicly documented register
-  protocol and mirrored open-source implementations, **not verified
-  against a physical WT901B in this environment.** The parent HWT3100
-  project's own history (its line format was wrong until checked
-  against a real device) is a direct warning that this class of detail
-  has been wrong before. Pressure (`0x56`) is a partial exception: a
-  real captured frame decoded to a plausible atmospheric value (~101
-  kPa), which is at least consistent with the assumed int32-Pa layout,
-  though not proof the scale/offset are exactly right.
-- **Heading/rate-of-turn sign convention** — carried over from the
-  HWT3100's confirmed finding, not independently verified for the
-  WT901B's AHRS-fused yaw or its gyro axis polarity (§10).
+  protocol and mirrored open-source implementations. **Accel and angle
+  scale factors confirmed 2026-09-22**: gravity magnitude read ~1.00g
+  across different physical orientations (confirms the 16g/32768 accel
+  scale), and a physical ~90 deg tilt read ~86.5 deg pitch (confirms the
+  180deg/32768 angle scale) — see §10. **Gyro scale, all register
+  write code tables (CALSW/RRATE/BAUD/BANDWIDTH), and frame layout for
+  packet types other than acceleration/angle remain unverified against a
+  physical WT901B.** The parent HWT3100 project's own history (its line
+  format was wrong until checked against a real device) is a direct
+  warning that this class of detail has been wrong before. Pressure
+  (`0x56`) is a partial exception: a real captured frame decoded to a
+  plausible atmospheric value (~101 kPa), which is at least consistent
+  with the assumed int32-Pa layout, though not proof the scale/offset
+  are exactly right.
+- **Heading sign convention — resolved 2026-09-22.** Confirmed on real
+  hardware to match the HWT3100 (raw yaw increases counterclockwise);
+  see §10. `gyro_z`'s polarity is still inferred (same physical axis as
+  heading), not independently tested against a known turn direction.
 - **Whether CALSW=0 alone persists the just-completed magnetic
   calibration**, or whether the explicit SAVE write this firmware sends
   afterward is actually required — unverified (§8.2).

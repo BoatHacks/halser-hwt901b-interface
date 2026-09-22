@@ -15,12 +15,11 @@ namespace halser {
 // The sign convention below (negate the raw yaw before applying the
 // offset) carries over the HWT3100 fork's confirmed-on-real-hardware
 // finding for *that* module (raw Yaw increases counterclockwise, the
-// opposite of N2K/SignalK's clockwise-positive convention). Whether the
-// WT901B's AHRS-fused yaw output uses the same convention is
-// **unverified** in this environment — SPEC.md §11 flags this
-// explicitly, since the HWT3100 fork's own history is a direct warning
-// that this kind of manual/assumption-derived detail has been wrong
-// before until checked against a real device.
+// opposite of N2K/SignalK's clockwise-positive convention). Confirmed
+// on a physical WT901B (SPEC.md §10, §11): rotating the module
+// clockwise while watching the raw parsed heading showed it decreasing
+// (counterclockwise-positive), the same convention as the HWT3100 —
+// so the negation applies here too, not just carried over unverified.
 inline ImuReading ApplyCalibrationOffset(const ImuReading& reading,
                                           float heading_offset_degrees) {
   ImuReading corrected = reading;

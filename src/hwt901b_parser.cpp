@@ -16,9 +16,12 @@ int32_t ReadInt32LE(const uint8_t* p) {
 }
 
 // Scale factors per WitMotion's register protocol documentation.
-constexpr float kAngleScale = 180.0f / 32768.0f;   // §11: unverified
+// kAngleScale, kAccelScale: confirmed on real hardware 2026-09-22 —
+// gravity magnitude read ~1.00g across different orientations, and a
+// physical ~90 deg tilt read ~86.5 deg pitch (SPEC.md §10, §11).
+constexpr float kAngleScale = 180.0f / 32768.0f;
 constexpr float kGyroScale = 2000.0f / 32768.0f;   // §11: unverified
-constexpr float kAccelScale = 16.0f / 32768.0f;    // §11: unverified, +-16g range
+constexpr float kAccelScale = 16.0f / 32768.0f;    // +-16g range, confirmed
 
 }  // namespace
 

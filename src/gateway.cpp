@@ -611,12 +611,11 @@ void run_hwt901b_gateway() {
         }
 
         // Rate of turn: real gyro_z, sign-corrected the same direction
-        // as heading (SPEC.md §1.3, §11 — the WT901B's raw yaw-axis
-        // gyro sign convention relative to N2K/SignalK's "+ve =
-        // starboard" is unverified in this environment; carried over
-        // from the same assumption ApplyCalibrationOffset makes for
-        // heading, for consistency, not because it's independently
-        // confirmed).
+        // as heading (SPEC.md §1.3, §11). Heading's counterclockwise-
+        // positive raw convention is now confirmed on real hardware; the
+        // gyro_z channel itself hasn't been independently tested against
+        // a known turn direction, but shares the same physical yaw axis,
+        // so the same correction is applied here for consistency.
         float rate_of_turn_rad_s = -corrected.gyro_z * kDegreesToRadians;
         rate_of_turn_sender->rate_of_turn_.update(rate_of_turn_rad_s);
         if (signalk_enabled->get() && sk_rate_of_turn_enabled->get()) {
